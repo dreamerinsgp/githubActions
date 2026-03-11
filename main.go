@@ -14,7 +14,7 @@ func main() {
 
 	db, err := database.InitDB(cfg.MySQLDSN)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf(" Failed to connect to database: %v", err)
 	}
 
 	itemCountCache := &cache.ItemCountCache{}

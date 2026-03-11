@@ -2,7 +2,9 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 )
 
 // Config holds application configuration
@@ -14,6 +16,9 @@ type Config struct {
 // Load loads configuration from environment variables with defaults
 func Load() *Config {
 	mysqlDSN := os.Getenv("MYSQL_DSN")
+	if mysqlDSN == "" {
+		mysqlDSN = parseMySQLURL(os.Getenv("MYSQL_URL"))
+	}
 	if mysqlDSN == "" {
 		user := getEnv("MYSQL_USER", "root")
 		pass := getEnv("MYSQL_PASS", "root")
@@ -39,4 +44,32 @@ func getEnv(key, defaultVal string) string {
 		return v
 	}
 	return defaultVal
+}
+
+// parseMySQLURL 将 mysql://user:pass@host:port/db 转为 Go MySQL DSN
+func parseMySQLURL(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	if !strings.HasPrefix(raw, "mysql://") {
+		raw = "mysql://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	user := "root"
+	if u.User != nil {
+		user = u.User.Username()
+	}
+	pass, _ := u.User.Password()
+	host := u.Host
+	if host == "" {
+		return ""
+	}
+	db := strings.TrimPrefix(u.Path, "/")
+	if db == "" {
+		db = "jmeter_test"
+	}
+	return fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True", user, pass, host, db)
 }
