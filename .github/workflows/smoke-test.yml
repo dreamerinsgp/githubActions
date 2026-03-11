@@ -1,0 +1,68 @@
+name: Smoke Test
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: jmeter_test
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build Go API
+        run: go build -o app .
+
+      - name: Start Go API
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_USER: root
+          MYSQL_PASS: root
+          MYSQL_DB: jmeter_test
+        run: |
+          ./app &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/api/health > /dev/null; then
+              echo "Go API is ready"
+              break
+            fi
+            echo "Waiting for Go API... $i"
+            sleep 2
+          done
+
+      - name: Compile Java tests
+        working-directory: minijunit-java
+        run: |
+          mkdir -p target/classes target/test-classes
+          javac -d target/classes src/main/java/minijunit/*.java
+          javac -d target/test-classes -cp target/classes \
+            src/test/java/minijunit/*.java \
+            src/test/java/minijunit/api/*.java
+
+      - name: Run smoke tests
+        working-directory: minijunit-java
+        run: |
+          java -cp "target/classes:target/test-classes" minijunit.api.GoApiTest
