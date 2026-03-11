@@ -1,0 +1,37 @@
+# 针对真实部署环境（如 Railway）的冒烟测试
+# 需在仓库 Settings → Secrets 中配置 API_BASE_URL
+name: Smoke Test (Production)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 8 * * *'   # 每天早 8 点（UTC）
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Compile and run smoke tests
+        env:
+          API_URL: ${{ secrets.API_BASE_URL }}
+        run: |
+          if [ -z "$API_URL" ]; then
+            echo "::error::API_BASE_URL secret is not set. Add it in Settings → Secrets"
+            exit 1
+          fi
+          cd minijunit-java
+          mkdir -p target/classes target/test-classes
+          javac -d target/classes src/main/java/minijunit/*.java
+          javac -d target/test-classes -cp target/classes \
+            src/test/java/minijunit/*.java \
+            src/test/java/minijunit/api/*.java
+          java -cp "target/classes:target/test-classes" minijunit.api.GoApiTest

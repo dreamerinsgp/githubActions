@@ -1,4 +1,5 @@
-name: Smoke Test
+# PR/临时环境：push 时自动验证构建与基本连通性（不依赖 Railway）
+name: Smoke Test (CI)
 
 on:
   push:
@@ -47,11 +48,13 @@ jobs:
           for i in $(seq 1 30); do
             if curl -sf http://localhost:8080/api/health > /dev/null; then
               echo "Go API is ready"
-              break
+              exit 0
             fi
-            echo "Waiting for Go API... $i"
+            echo "Waiting for Go API... $i/30"
             sleep 2
           done
+          echo "::error::Go API failed to start within 60s"
+          exit 1
 
       - name: Compile Java tests
         working-directory: minijunit-java
