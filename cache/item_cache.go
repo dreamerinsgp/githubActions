@@ -3,6 +3,8 @@ package cache
 import (
 	"sync"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -15,6 +17,30 @@ type ItemCountCache struct {
 	mu      sync.RWMutex
 	count   int64
 	expires time.Time
+
+	hitsTotal         prometheus.Counter
+	missesTotal       prometheus.Counter
+	invalidationsTotal prometheus.Counter
+}
+
+// NewItemCountCache 创建带 Prometheus 指标的缓存实例
+func NewItemCountCache() *ItemCountCache {
+	c := &ItemCountCache{
+		hitsTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "jmeter_api_item_count_cache_hits_total",
+			Help: "Total number of item count cache hits",
+		}),
+		missesTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "jmeter_api_item_count_cache_misses_total",
+			Help: "Total number of item count cache misses",
+		}),
+		invalidationsTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "jmeter_api_item_count_cache_invalidations_total",
+			Help: "Total number of item count cache invalidations",
+		}),
+	}
+	prometheus.MustRegister(c.hitsTotal, c.missesTotal, c.invalidationsTotal)
+	return c
 }
 
 // Get 返回缓存的 count 及是否命中
@@ -22,8 +48,10 @@ func (c *ItemCountCache) Get() (int64, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if time.Now().Before(c.expires) {
+		c.hitsTotal.Inc()
 		return c.count, true
 	}
+	c.missesTotal.Inc()
 	return 0, false
 }
 
@@ -39,6 +67,7 @@ func (c *ItemCountCache) Set(count int64) {
 func (c *ItemCountCache) Invalidate() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.invalidationsTotal.Inc()
 	c.expires = time.Time{}
 }
 

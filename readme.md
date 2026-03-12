@@ -15,15 +15,22 @@
 CREATE DATABASE jmeter_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-若出现 `Access denied for user 'root'@'localhost'`，通常是因为 MySQL 将 `root@localhost` 与 `root@127.0.0.1` 分开处理。在 MySQL 中执行：
+若出现 `Access denied for user 'root'@'localhost'`，通常由以下原因引起：
+
+1. **密码不正确**：MySQL 中 root 实际密码与代码中的 `root` 不一致  
+2. **认证插件**：MySQL 8 默认用 `caching_sha2_password`，部分客户端不兼容  
+3. **用户区分**：`root@localhost` 与 `root@127.0.0.1` 被视为不同用户  
+
+**解决办法**（以 root 身份登录 MySQL 后执行）：
 
 ```sql
-CREATE USER 'root'@'127.0.0.1' IDENTIFIED BY 'root';
-GRANT ALL PRIVILEGES ON jmeter_test.* TO 'root'@'127.0.0.1';
+-- 修改 root 用户认证和密码
+ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'root';
+ALTER USER 'root'@'127.0.0.1' IDENTIFIED WITH mysql_native_password BY 'root';
 FLUSH PRIVILEGES;
 ```
 
-或改用 localhost 连接：`$env:MYSQL_HOST="localhost"`
+**临时方式**：若 MySQL 暂不可用，应用会在连接失败时自动降级为仅指标模式（`/metrics`、`/health`、`/items/slow`），可先验证接口。
 
 ## 启动服务
 
@@ -36,6 +43,15 @@ go run main.go
 ```
 
 服务默认监听 `http://localhost:8080`。
+
+### MySQL 不可用时（SKIP_DB 模式）
+
+若 MySQL 连接失败（如 Access denied），可设置 `SKIP_DB=1` 跳过数据库，仅启动 `/metrics`、`/health`、`/api/items/slow`，用于验证 Prometheus 指标或压测：
+
+```powershell
+$env:SKIP_DB="1"
+go run main.go
+```
 
 ### 配置 MySQL 连接
 
@@ -64,6 +80,15 @@ go run main.go
 | UpdateItem | 用 `Updates(map)` 按字段更新，避免 SELECT+Save 全量更新 |
 | ListItems | 限制 maxOffset=10000，防止超大 offset 全表扫描；显式 `Order("id")` 利用主键索引 |
 | 内存缓存 | 当 items 总数 > 10 万时，缓存 `COUNT(*)` 结果 60 秒；Create/Update/Delete 时自动失效 |
+
+## GitHub Actions 冒烟测试
+
+| Workflow | 用途 | 触发 |
+|----------|------|------|
+| Smoke Test (CI) | 临时 MySQL + 临时 Go，验证构建与基本连通 | push、手动 |
+| Smoke Test (Production) | 针对真实部署环境（Railway） | 手动、每日 8:00 UTC |
+
+**Production 需配置**：仓库 Settings → Secrets → 新增 `API_BASE_URL` = `https://你的应用.up.railway.app`
 
 ## API 接口
 

@@ -7,12 +7,16 @@ import minijunit.*;
  * 运行前需先启动 Go 服务：go run main.go
  */
 public class GoApiTest {
-    private static final int PORT = 8080;
+    private static final int DEFAULT_PORT = 8080;
     private HttpHelper http;
 
     @Before
     public void setUp() {
-        http = HttpHelper.localhost(PORT);
+        String baseUrl = System.getenv("API_URL");
+        if (baseUrl == null || baseUrl.isEmpty()) {
+            baseUrl = "http://localhost:" + DEFAULT_PORT;
+        }
+        http = new HttpHelper(baseUrl);
     }
 
     @Test

@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/plugin/prometheus"
 )
 
 // InitDB initializes the MySQL connection and runs AutoMigrate
@@ -25,6 +26,15 @@ func InitDB(dsn string) (*gorm.DB, error) {
 	sqlDB.SetMaxIdleConns(20)   // 空闲连接数
 	sqlDB.SetMaxOpenConns(100)  // 最大打开连接数
 	sqlDB.SetConnMaxLifetime(0) // 连接不复用时长限制
+
+	// 注册 DB 指标到 Prometheus（连接池状态等）
+	if err := db.Use(prometheus.New(prometheus.Config{
+		DBName:          "jmeter_test",
+		RefreshInterval: 15,
+		StartServer:     false, // 不单独起服务，由应用 /metrics 统一暴露
+	})); err != nil {
+		return nil, err
+	}
 
 	// Auto migrate the Item model
 	if err := db.AutoMigrate(&models.Item{}); err != nil {

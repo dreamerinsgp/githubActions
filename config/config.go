@@ -7,17 +7,26 @@ import (
 	"strings"
 )
 
+// MySQL 默认配置（无环境变量时使用）
+const (
+	mysqlUser = "root"
+	mysqlPass = "root"
+	mysqlHost = "localhost" // 与 mysql -u root -proot 的默认连接一致；若报错可改为 "127.0.0.1"
+	mysqlPort = "3306"
+	mysqlDB   = "jmeter_test"
+)
+
 // Config holds application configuration
 type Config struct {
 	MySQLDSN string
 	Port     string
+	SkipDB   bool // 为 true 时跳过 MySQL，仅启动 /metrics、/health、/items/slow（供 MySQL 不可用时使用）
 }
 
-// Load loads configuration from environment variables with defaults
+// Load loads configuration
 func Load() *Config {
 	mysqlDSN := os.Getenv("MYSQL_DSN")
 	if mysqlDSN == "" {
-		// Railway 使用 MYSQL_PRIVATE_URL，其他平台可能用 MYSQL_URL 或 DATABASE_URL
 		mysqlDSN = parseMySQLURL(os.Getenv("MYSQL_PRIVATE_URL"))
 	}
 	if mysqlDSN == "" {
@@ -27,12 +36,8 @@ func Load() *Config {
 		mysqlDSN = parseMySQLURL(os.Getenv("DATABASE_URL"))
 	}
 	if mysqlDSN == "" {
-		user := getEnv("MYSQL_USER", "root")
-		pass := getEnv("MYSQL_PASS", "root")
-		host := getEnv("MYSQL_HOST", "127.0.0.1") // 用 127.0.0.1 替代 localhost，避免 IPv6 [::1] 连接失败
-		port := getEnv("MYSQL_PORT", "3306")
-		db := getEnv("MYSQL_DB", "jmeter_test")
-		mysqlDSN = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True", user, pass, host, port, db)
+		mysqlDSN = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&allowNativePasswords=true",
+			mysqlUser, mysqlPass, mysqlHost, mysqlPort, mysqlDB)
 	}
 
 	port := os.Getenv("PORT")
@@ -40,20 +45,15 @@ func Load() *Config {
 		port = "8080"
 	}
 
+	skipDB := strings.ToLower(os.Getenv("SKIP_DB")) == "1" || strings.ToLower(os.Getenv("SKIP_DB")) == "true"
+
 	return &Config{
 		MySQLDSN: mysqlDSN,
 		Port:     port,
+		SkipDB:   skipDB,
 	}
 }
 
-func getEnv(key, defaultVal string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return defaultVal
-}
-
-// parseMySQLURL 将 mysql://user:pass@host:port/db 转为 Go MySQL DSN
 func parseMySQLURL(raw string) string {
 	if raw == "" {
 		return ""
@@ -65,22 +65,19 @@ func parseMySQLURL(raw string) string {
 	if err != nil {
 		return ""
 	}
-	user := "root"
+	user, pass := "root", "root"
 	if u.User != nil {
 		user = u.User.Username()
+		pass, _ = u.User.Password()
 	}
-	pass, _ := u.User.Password()
 	host := u.Host
 	if host == "" {
 		return ""
 	}
+	// 保持 localhost 原样，与 mysql CLI 默认行为一致
 	db := strings.TrimPrefix(u.Path, "/")
 	if db == "" {
 		db = "jmeter_test"
 	}
-	// localhost 可能解析为 [::1]，导致连接失败，统一改为 127.0.0.1
-	if host == "localhost" {
-		host = "127.0.0.1"
-	}
-	return fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True", user, pass, host, db)
+	return fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True&allowNativePasswords=true", user, pass, host, db)
 }
