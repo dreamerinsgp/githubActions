@@ -53,6 +53,18 @@ $env:SKIP_DB="1"
 go run main.go
 ```
 
+### /metrics 的 Basic Auth（Grafana Cloud 等）
+
+为满足 Grafana Cloud Metrics Endpoint 的认证要求，可对 `/metrics` 启用 Basic Auth：
+
+```powershell
+$env:METRICS_AUTH_USER="grafana"
+$env:METRICS_AUTH_PASS="your-secret-password"
+go run main.go
+```
+
+在 Grafana Cloud 创建 scrape job 时，选择 **Basic** 认证并填入上述用户名和密码。
+
 ### 配置 MySQL 连接
 
 默认使用 `root:root@127.0.0.1:3306/jmeter_test`。若密码不同，可通过环境变量覆盖：

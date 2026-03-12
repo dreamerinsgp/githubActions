@@ -18,9 +18,11 @@ const (
 
 // Config holds application configuration
 type Config struct {
-	MySQLDSN string
-	Port     string
-	SkipDB   bool // 为 true 时跳过 MySQL，仅启动 /metrics、/health、/items/slow（供 MySQL 不可用时使用）
+	MySQLDSN    string
+	Port        string
+	SkipDB      bool   // 为 true 时跳过 MySQL，仅启动 /metrics、/health、/items/slow（供 MySQL 不可用时使用）
+	MetricsUser string // /metrics 的 Basic Auth 用户名，与 MetricsPass 同时设置时启用
+	MetricsPass string // /metrics 的 Basic Auth 密码
 }
 
 // Load loads configuration
@@ -47,10 +49,16 @@ func Load() *Config {
 
 	skipDB := strings.ToLower(os.Getenv("SKIP_DB")) == "1" || strings.ToLower(os.Getenv("SKIP_DB")) == "true"
 
+	// /metrics Basic Auth（供 Grafana Cloud Metrics Endpoint 等使用）
+	metricsUser := os.Getenv("METRICS_AUTH_USER")
+	metricsPass := os.Getenv("METRICS_AUTH_PASS")
+
 	return &Config{
-		MySQLDSN: mysqlDSN,
-		Port:     port,
-		SkipDB:   skipDB,
+		MySQLDSN:    mysqlDSN,
+		Port:        port,
+		SkipDB:      skipDB,
+		MetricsUser: metricsUser,
+		MetricsPass: metricsPass,
 	}
 }
 

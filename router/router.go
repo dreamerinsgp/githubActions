@@ -10,8 +10,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// Setup configures and returns the Gin router
-func Setup(db *gorm.DB, itemCountCache *cache.ItemCountCache) *gin.Engine {
+// Setup configures and returns the Gin router.
+// metricsUser, metricsPass: 同时非空时对 /metrics 启用 Basic Auth（供 Grafana Cloud 等使用）
+func Setup(db *gorm.DB, itemCountCache *cache.ItemCountCache, metricsUser, metricsPass string) *gin.Engine {
 	r := gin.Default()
 
 	// Prometheus 指标：只加中间件采集 HTTP 请求，不调用 p.Use 避免重复注册 /metrics
@@ -24,7 +25,11 @@ func Setup(db *gorm.DB, itemCountCache *cache.ItemCountCache) *gin.Engine {
 	}
 	r.Use(p.HandlerFunc())
 	// 统一用 promhttp 暴露全部指标（含 HTTP、process、cache、gorm）
-	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	metricsHandlers := []gin.HandlerFunc{gin.WrapH(promhttp.Handler())}
+	if metricsUser != "" && metricsPass != "" {
+		metricsHandlers = append([]gin.HandlerFunc{gin.BasicAuth(gin.Accounts{metricsUser: metricsPass})}, metricsHandlers...)
+	}
+	r.GET("/metrics", metricsHandlers...)
 
 	itemHandler := handlers.NewItemHandler(db, itemCountCache)
 

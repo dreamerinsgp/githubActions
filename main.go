@@ -39,7 +39,7 @@ func main() {
 	}
 
 	itemCountCache := cache.NewItemCountCache()
-	r := router.Setup(db, itemCountCache)
+	r := router.Setup(db, itemCountCache, cfg.MetricsUser, cfg.MetricsPass)
 
 	addr := ":" + cfg.Port
 	log.Printf("Server starting on http://localhost%s (SKIP_DB=%v)", addr, cfg.SkipDB)
