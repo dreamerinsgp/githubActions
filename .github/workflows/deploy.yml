@@ -1,16 +1,13 @@
-# 构建 + 冒烟测试（不部署）
-# Push 到任意分支时运行测试，merge 到 main 前在 PR 上验证
-# 部署需手动触发 "Deploy (Test → Railway)" workflow
-name: Smoke Test (CI)
+# 手动部署：先跑测试，通过后才部署到 Railway
+# 需配置 RAILWAY_TOKEN，并关闭 Railway 的自动 Git 部署
+name: Deploy (Test → Railway)
 
 on:
-  push:                   # 任意分支 push 都跑测试（不部署）
-  pull_request:
-    branches: [main, master]   # PR 时跑测试，通过后再 merge
-  workflow_dispatch:      # 手动触发测试
+  workflow_dispatch:     # 仅手动触发，不随 push 自动执行
 
 jobs:
-  smoke:
+  test:
+    name: Build & Test
     runs-on: ubuntu-latest
     services:
       mysql:
@@ -59,7 +56,7 @@ jobs:
           echo "::error::Go API failed to start within 60s"
           exit 1
 
-      - name: Compile Java tests
+      - name: Compile & Run smoke tests
         working-directory: minijunit-java
         run: |
           mkdir -p target/classes target/test-classes
@@ -67,8 +64,18 @@ jobs:
           javac -d target/test-classes -cp target/classes \
             src/test/java/minijunit/*.java \
             src/test/java/minijunit/api/*.java
-
-      - name: Run smoke tests
-        working-directory: minijunit-java
-        run: |
           java -cp "target/classes:target/test-classes" minijunit.api.GoApiTest
+
+  deploy:
+    name: Deploy to Railway
+    runs-on: ubuntu-latest
+    needs: test
+    container: ghcr.io/railwayapp/cli:latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy
+        run: railway up --detach
