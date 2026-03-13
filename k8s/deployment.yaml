@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jmeter-test-api
+  labels:
+    app: jmeter-test
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: jmeter-test
+  template:
+    metadata:
+      labels:
+        app: jmeter-test
+    spec:
+      # 使用本地镜像时必须设置，否则 K8s 会尝试从远程拉取
+      containers:
+        - name: api
+          image: jmeter-test:latest
+          imagePullPolicy: Never   # 仅使用本地镜像，不尝试拉取
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SKIP_DB
+              value: "1"           # 无 MySQL 时降级模式，提供 /health /metrics
+            - name: PORT
+              value: "8080"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
