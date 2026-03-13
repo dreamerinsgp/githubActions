@@ -28,3 +28,8 @@ kubectl rollout status deployment $DeploymentName
 
 Write-Host "`n===== Done =====" -ForegroundColor Green
 kubectl get pods -l app=jmeter-test
+
+
+CI： continuous Integration
+    
+CD: continuous Deployment 
